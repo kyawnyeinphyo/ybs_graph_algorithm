@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YBS Route Planner | ရန်ကုန်ဘတ်စ်ကား လမ်းကြောင်းရှာဖွေစနစ် (A* Algorithm)</title>
+  
+  <!-- Leaflet Map CSS (Local with CDN fallback) -->
+  <link rel="stylesheet" href="lib/leaflet.css" onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';" />
+  
+  <!-- Google Fonts for Myanmar Unicode & UI -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Myanmar:wght@400;500;600;700&family=Pyidaungsu:wght@400;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar: Search & Results -->
+    <aside class="sidebar">
+      <header class="app-header">
+        <div class="header-brand">
+          <div class="brand-icon">🚌</div>
+          <div>
+            <div class="brand-title">YBS Route Planner</div>
+            <div class="brand-subtitle">ရန်ကုန်ဘတ်စ်ကား လမ်းကြောင်းရှာဖွေစနစ်</div>
+          </div>
+        </div>
+        <button id="btnInfoModal" class="btn-icon-header" title="A* Algorithm အကြောင်း လေ့လာရန်">
+          <span>ℹ️</span> A* အယ်ဂိုရီသမ်
+        </button>
+      </header>
+
+      <div class="sidebar-body">
+        <!-- Search Section -->
+        <section class="search-section">
+          <div class="input-group-wrapper">
+            <!-- Start Stop Input -->
+            <div class="input-box">
+              <span class="input-icon start-icon">🟢</span>
+              <input 
+                type="text" 
+                id="inputStartStop" 
+                class="search-input" 
+                placeholder="စတင်စီးနင်းမည့် မှတ်တိုင် (ဥပမာ - လှည်းတန်း၊ ဆူးလေ...)" 
+                autocomplete="off"
+              />
+              <button class="clear-btn" id="btnClearStart" title="ဖျက်မည်">×</button>
+              <div id="dropdownStart" class="autocomplete-dropdown"></div>
+            </div>
+
+            <!-- Swap Button -->
+            <button id="btnSwapStops" class="btn-swap" title="မှတ်တိုင်များ အပြန်အလှန်ပြောင်းမည်">
+              ⇅
+            </button>
+
+            <!-- Target Stop Input -->
+            <div class="input-box">
+              <span class="input-icon target-icon">🔴</span>
+              <input 
+                type="text" 
+                id="inputTargetStop" 
+                class="search-input" 
+                placeholder="ရောက်ရှိလိုသည့် မှတ်တိုင် (ဥပမာ - ဆူးလေ၊ အောင်မင်္ဂလာ...)" 
+                autocomplete="off"
+              />
+              <button class="clear-btn" id="btnClearTarget" title="ဖျက်မည်">×</button>
+              <div id="dropdownTarget" class="autocomplete-dropdown"></div>
+            </div>
+          </div>
+
+          <!-- Form Actions -->
+          <div class="form-actions">
+            <button id="btnSearch" class="btn-search">
+              <span>🔍</span> ဘတ်စ်ကား ရှာဖွေမည်
+            </button>
+            <button id="btnReset" class="btn-reset" title="အစအဆုံး အသစ်ပြန်စမည်">
+              အသစ်
+            </button>
+          </div>
+
+          <!-- Popular Presets -->
+          <div class="presets-container">
+            <div class="presets-label">လူစီးများသော ခရီးစဉ်များ</div>
+            <div class="presets-list">
+              <button class="preset-chip" data-start="လှည်းတန်း" data-target="ဆူးလေ">လှည်းတန်း ➔ ဆူးလေ</button>
+              <button class="preset-chip" data-start="ဒဂုံတက္ကသိုလ်" data-target="လှည်းတန်း">ဒဂုံတက္ကသိုလ် ➔ လှည်းတန်း</button>
+              <button class="preset-chip" data-start="အောင်မင်္ဂလာ" data-target="ဆူးလေ">အောင်မင်္ဂလာ ➔ ဆူးလေ</button>
+              <button class="preset-chip" data-start="သမိုင်း" data-target="ဆူးလေ">သမိုင်း ➔ ဆူးလေ</button>
+              <button class="preset-chip" data-start="နတ်စင်" data-start-tsp="တောင်ဒဂုံ" data-target="နည်းပညာတက္ကသိုလ်" data-target-tsp="လှိုင်သာယာ">တောင်ဒဂုံ ➔ လှိုင်သာယာ</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Results Section -->
+        <section class="results-section">
+          <!-- Status Bar -->
+          <div class="results-status-bar" id="statusBar" style="display: none;">
+            <div>
+              <span class="status-count" id="statusCountText">0 လမ်းကြောင်း</span>
+            </div>
+            <div class="status-timing" id="statusTimingText">0 ms</div>
+          </div>
+
+          <!-- Filter Tabs -->
+          <div class="filter-tabs" id="filterTabs" style="display: none;">
+            <button class="tab-btn active" data-tab="all">
+              အားလုံး <span class="tab-badge" id="badgeAll">0</span>
+            </button>
+            <button class="tab-btn" data-tab="direct">
+              ၁ ဆင့် (တိုက်ရိုက်) <span class="tab-badge" id="badgeDirect">0</span>
+            </button>
+            <button class="tab-btn" data-tab="oneTransfer">
+              ၂ ဆင့် (၁ ကြိမ်ပြောင်း) <span class="tab-badge" id="badgeOneTransfer">0</span>
+            </button>
+            <button class="tab-btn" data-tab="twoTransfers">
+              ၃ ဆင့် (၂ ကြိမ်ပြောင်း) <span class="tab-badge" id="badgeTwoTransfers">0</span>
+            </button>
+          </div>
+
+          <!-- List Container -->
+          <div class="routes-list" id="routesList">
+            <div class="empty-state" id="initialState">
+              <div class="empty-icon">🗺️</div>
+              <div class="empty-title">မှတ်တိုင်များ ရွေးချယ်ပါ</div>
+              <div class="empty-text">
+                စတင်စီးနင်းမည့် မှတ်တိုင်နှင့် ရောက်ရှိလိုသည့် မှတ်တိုင်ကို ရွေးချယ်ပြီး ရှာဖွေနိုင်ပါသည်။
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </aside>
+
+    <!-- Map Container -->
+    <main class="map-container">
+      <div id="map"></div>
+
+      <!-- Floating Selected Route Summary -->
+      <div id="mapOverlay" class="map-overlay-card">
+        <div class="overlay-title" id="overlayTitle">ရွေးချယ်ထားသော လမ်းကြောင်း</div>
+        <div class="overlay-desc" id="overlayDesc">အသေးစိတ် အချက်အလက်များ</div>
+      </div>
+
+      <!-- Map Floating Controls -->
+      <div class="map-controls-group">
+        <button id="btnCenterYangon" class="map-control-btn" title="ရန်ကုန်မြို့ဗဟိုသို့ ပြန်ညွှန်းမည်">
+          🎯 ရန်ကုန်မြို့လယ်
+        </button>
+        <button id="btnClearMap" class="map-control-btn" title="မြေပုံရှင်းလင်းမည်">
+          🧹 ရှင်းလင်းမည်
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <!-- A* Algorithm Info Modal -->
+  <div class="modal-backdrop" id="modalBackdrop">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">🧠 A* Algorithm & Graph Model အလုပ်လုပ်ပုံ</h3>
+        <button class="modal-close-btn" id="btnModalClose">×</button>
+      </div>
+      <div class="modal-body">
+        <h4>၁။ Graph Modeling (ကွန်ရက်ပုံစံ)</h4>
+        <p>
+          • <strong>Nodes (မှတ်တိုင်များ):</strong> ရန်ကုန်မြို့တွင်းရှိ YBS မှတ်တိုင်ပေါင်း ၂,၀၉၃ ခုကို တည်နေရာ လတ္တီတွဒ်/လောင်ဂျီတွဒ် (Lat, Lng) နှင့်တကွ Graph Node များအဖြစ် အသုံးပြုထားပါသည်။<br>
+          • <strong>Edges (ချိတ်ဆက်မှုများ):</strong> YBS ဘတ်စ်ကားလိုင်း ၁၂၅ လိုင်း၏ လမ်းကြောင်းအစဉ်လိုက် ဖြတ်သန်းမှုများကို စီးနင်းနိုင်သော Directed Edges အဖြစ် သတ်မှတ်ထားပါသည်။<br>
+          • <strong>Transfer Edges (လမ်းကူးပြောင်းစီးမှု):</strong> လမ်းတစ်ဖက်တစ်ချက်ရှိ မျက်နှာချင်းဆိုင်မှတ်တိုင်များသို့ ၉၀ မီတာအတွင်း ခြေလျင်လမ်းလျှောက်၍ ကားပြောင်းစီးနိုင်သော ချိတ်ဆက်မှုများကိုလည်း ထည့်သွင်းတွက်ချက်ထားပါသည်။
+        </p>
+
+        <h4>၂။ A* Algorithm Heuristic Function: $h(n)$</h4>
+        <p>
+          လက်ရှိရောက်ရှိနေသော မှတ်တိုင် $n$ မှ ပန်းတိုင်မှတ်တိုင် $Target$ အထိ အတိုဆုံး ကမ္ဘာ့မျက်နှာပြင် အကွာအဝေးကို <strong>Haversine Formula</strong> ဖြင့် တွက်ချက်ထားပါသည်။<br>
+          အကွာအဝေးသည် ဖြတ်သန်းရမည့် အစစ်အမှန် ခရီးထက် ဘယ်သောအခါမျှ မပိုနိုင်သောကြောင့် $h(n) \le h^*(n)$ ဖြစ်ပြီး <strong>Admissible & Consistent Heuristic</strong> ဖြစ်ကြောင်း အာမခံပါသည်။
+        </p>
+
+        <h4>၃။ Cost Evaluation Function: $g(n)$</h4>
+        <p>
+          ခရီးသည်များအတွက် အဆင်ပြေဆုံးဖြစ်စေရန် ကားပြောင်းစီးရသည့် အကြိမ်အရေအတွက်နှင့် စုစုပေါင်း အကွာအဝေးကို ချိန်ညှိတွက်ချက်ထားပါသည် -<br>
+          <code>Cost = Total_Distance + (Transfers × 10 km) + (Stops × 0.08 km)</code><br>
+          ကားပြောင်းစီးရမှု နည်းပါးခြင်း (၁ ဆင့် > ၂ ဆင့် > ၃ ဆင့်) ကို အဓိက ဦးစားပေးပြီး အကောင်းဆုံး လမ်းကြောင်းကို အပေါ်ဆုံးတွင် ထားပေးပါသည်။
+        </p>
+
+        <h4>၄။ Multi-Stage Route Categorization</h4>
+        <p>
+          • <strong>၁ ဆင့် (တိုက်ရိုက်):</strong> ကားတစ်စီးတည်းဖြင့် တိုက်ရိုက်ရောက်ရှိနိုင်သော လမ်းကြောင်းများ။<br>
+          • <strong>၂ ဆင့် (၁ ကြိမ်ပြောင်း):</strong> အလယ်အလတ် မှတ်တိုင်တစ်ခုတွင် ကားတစ်ကြိမ်ပြောင်းစီးရသော လမ်းကြောင်းများ။<br>
+          • <strong>၃ ဆင့် (၂ ကြိမ်ပြောင်း):</strong> လှိုင်သာယာနှင့် တောင်ဒဂုံကဲ့သို့ အလွန်ဝေးကွာသော မြို့နယ်များအကြား အလယ်အလတ် လမ်းကြောင်းတစ်ခု ကြားခံစီးနင်းရသော လမ်းကြောင်းများ။
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load Scripts -->
+  <script src="lib/leaflet.js" onerror="this.onerror=null;this.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';"></script>
+  <script src="js/data_stops.js"></script>
+  <script src="js/data_routes.js"></script>
+  <script src="js/graph_router.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
